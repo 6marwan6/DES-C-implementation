@@ -119,25 +119,23 @@ uint64_t permute(uint64_t input, const int *table, int size, int out_bits) {
   }
   return output;
 }
+void RoundLeftShift(uint32_t *Number, int shiftsNumber) {
+    *Number = ((*Number << shiftsNumber) | (*Number >> (28 - shiftsNumber))) & 0x0FFFFFFF;
+}
+
 void keyGeneration(uint64_t *keys) {
-    /* 1) Drop parity bits using PC1 (64 -> 56) */
-    uint64_t k56 = permute(key, permuted_choice_1, 64, 56);
+    uint64_t permutedKey = permute(key,permutedChoice1,64,56);
+    uint32_t left = (permutedKey >> 28) & 0x0FFFFFFF;
+    uint32_t right = permutedKey & 0x0FFFFFFF;
 
-    /* 2) Split into C and D, 28 bits each */
-    uint32_t C = (uint32_t)((k56 >> 28) & 0x0FFFFFFF);
-    uint32_t D = (uint32_t)(k56 & 0x0FFFFFFF);
-
-    /* 3) Generate 16 round keys */
-    for (int i = 0; i < 16; ++i) {
-        int s = shift_left[i];
-        /* left rotate within 28 bits */
-        C = ((C << s) | (C >> (28 - s))) & 0x0FFFFFFF;
-        D = ((D << s) | (D >> (28 - s))) & 0x0FFFFFFF;
-
-        uint64_t CD = ((uint64_t)C << 28) | (uint64_t)D; /* 56 bits */
-        keys[i] = permute(CD, permuted_choice_2, 56, 48); /* 48 bits in low */
+    for(int i = 0 ; i < 16 ; i++){
+        RoundLeftShift(&left,shift_left[i]);
+        RoundLeftShift(&right,shift_left[i]);
+        uint64_t CombinedKey = (((uint64_t)left) << 28) | (uint64_t)right;
+        keys[i] = permute(CombinedKey,permutedChoice2,56,48);
     }
 }
+
 
 uint32_t F_function(uint32_t R, uint64_t K) {
     // 1. Expand 32-bit R to 48 bits
