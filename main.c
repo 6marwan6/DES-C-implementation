@@ -252,8 +252,8 @@ int main(int argc, char *argv[]) {
   data_blocks = (uint64_t *)malloc(num_blocks * BLOCK_SIZE);
 
   fread(data_blocks, BLOCK_SIZE, num_blocks, file1);
-  fclose(file1);
 
+  
   // Handle endianness for input data
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   for (size_t i = 0; i < num_blocks; i++) {
