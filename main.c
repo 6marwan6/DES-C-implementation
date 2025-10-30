@@ -9,7 +9,7 @@
 
 // === DES TABLES ===
 //
-
+uint64_t key;
 bool is_encrypt_mode = false;
 uint64_t *data_blocks = NULL;
 size_t num_blocks = 0;
@@ -119,6 +119,46 @@ uint64_t permute(uint64_t input, const int *table, int size, int out_bits) {
   }
   return output;
 }
+void keyGeneration(uint64_t *keys) {
+    /* 1) Drop parity bits using PC1 (64 -> 56) */
+    uint64_t k56 = permute(key, permuted_choice_1, 64, 56);
+
+    /* 2) Split into C and D, 28 bits each */
+    uint32_t C = (uint32_t)((k56 >> 28) & 0x0FFFFFFF);
+    uint32_t D = (uint32_t)(k56 & 0x0FFFFFFF);
+
+    /* 3) Generate 16 round keys */
+    for (int i = 0; i < 16; ++i) {
+        int s = shift_left[i];
+        /* left rotate within 28 bits */
+        C = ((C << s) | (C >> (28 - s))) & 0x0FFFFFFF;
+        D = ((D << s) | (D >> (28 - s))) & 0x0FFFFFFF;
+
+        uint64_t CD = ((uint64_t)C << 28) | (uint64_t)D; /* 56 bits */
+        keys[i] = permute(CD, permuted_choice_2, 56, 48); /* 48 bits in low */
+    }
+}
+
+uint32_t F_function(uint32_t R, uint64_t K) {
+    // 1. Expand 32-bit R to 48 bits
+    uint64_t expanded = permute((uint64_t)R, expansion, 32, 48);
+
+    // 2. XOR with 48-bit subkey
+    uint64_t xored = expanded ^ K;
+
+    // 3. Apply S-boxes
+    uint32_t sbox_output = 0;
+    for (int i = 0; i < 8; i++) {
+        uint8_t six_bits = (xored >> (42 - 6*i)) & 0x3F;
+        int row = ((six_bits & 0x20) >> 4) | (six_bits & 1);
+        int col = (six_bits >> 1) & 0xF;
+        sbox_output = (sbox_output << 4) | s_box[i][row][col];
+    }
+
+    // 4. Apply permutation P
+    uint32_t result = (uint32_t)permute((uint64_t)sbox_output, transposition_permutation, 32, 32);
+    return result;
+}
 
 uint64_t DES(uint64_t block, const uint64_t *keys) {
   /* Initial permutation */
@@ -193,11 +233,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  char key[BLOCK_SIZE];
-  if (fread(key, 1, BLOCK_SIZE, keyFile) != BLOCK_SIZE) {
+  if (fread(&key, 1, BLOCK_SIZE, keyFile) != BLOCK_SIZE) {
     fprintf(stderr, "Error: key file must be %d bytes\n", BLOCK_SIZE);
     return 1;
   }
+  
+  // Handle endianness for the key
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  key = __builtin_bswap64(key);
+#endif
+
   struct stat st;
 
   stat(argv[3], &st);
@@ -209,9 +254,23 @@ int main(int argc, char *argv[]) {
   fread(data_blocks, BLOCK_SIZE, num_blocks, file1);
   fclose(file1);
 
+  // Handle endianness for input data
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  for (size_t i = 0; i < num_blocks; i++) {
+    data_blocks[i] = __builtin_bswap64(data_blocks[i]);
+  }
+#endif
+
   is_encrypt_mode = (mode[0] == 'e');
 
   processData();
+
+  // Handle endianness for output data
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  for (size_t i = 0; i < num_blocks; i++) {
+    data_blocks[i] = __builtin_bswap64(data_blocks[i]);
+  }
+#endif
 
   fwrite(data_blocks, BLOCK_SIZE, num_blocks, file2);
 
