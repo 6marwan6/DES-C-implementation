@@ -124,7 +124,7 @@ void RoundLeftShift(uint32_t *Number, int shiftsNumber) {
 }
 
 void keyGeneration(uint64_t *keys) {
-    uint64_t permutedKey = permute(key,permutedChoice1,64,56);
+    uint64_t permutedKey = permute(key,permuted_choice_1,64,56);
     uint32_t left = (permutedKey >> 28) & 0x0FFFFFFF;
     uint32_t right = permutedKey & 0x0FFFFFFF;
 
@@ -132,7 +132,7 @@ void keyGeneration(uint64_t *keys) {
         RoundLeftShift(&left,shift_left[i]);
         RoundLeftShift(&right,shift_left[i]);
         uint64_t CombinedKey = (((uint64_t)left) << 28) | (uint64_t)right;
-        keys[i] = permute(CombinedKey,permutedChoice2,56,48);
+        keys[i] = permute(CombinedKey,permuted_choice_2,56,48);
     }
 }
 
